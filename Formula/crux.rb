@@ -1,31 +1,50 @@
 class Crux < Formula
-  desc "Terminal dashboard for AI coding tool token usage"
+  desc "Terminal dashboard and menu bar monitor for AI coding tool token usage"
   homepage "https://github.com/amaljithkuttamath/crux"
-  version "0.2.0"
+  version "0.5.0"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/amaljithkuttamath/crux/releases/download/v0.2.0/crux-macos-arm64.tar.gz"
-      sha256 "34d56807ce40451327e8791eace305b7ead0e56c85b71117f8badabe39142b60"
+      url "https://github.com/amaljithkuttamath/crux/releases/download/v0.5.0/crux-macos-arm64.tar.gz"
+      sha256 "58f480b86c372f95366b0de8050bf5662b8685e22a01381d8f62cd436faafdab"
     else
-      url "https://github.com/amaljithkuttamath/crux/releases/download/v0.2.0/crux-macos-amd64.tar.gz"
-      sha256 "c494b61bb558622022c523ee2525119ff126afeb86d07f53cae80ed4e70991f2"
+      url "https://github.com/amaljithkuttamath/crux/releases/download/v0.5.0/crux-macos-amd64.tar.gz"
+      sha256 "a1a621463d37e8f802dfa9a1b445c757a8464995f520b7cf1928c35f7267b529"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/amaljithkuttamath/crux/releases/download/v0.2.0/crux-linux-arm64.tar.gz"
-      sha256 "abb0c13bbbbe99b7d8f63b2f8de2d99b6f563eec370554fd4f46cc254dcc4a2d"
+      url "https://github.com/amaljithkuttamath/crux/releases/download/v0.5.0/crux-linux-arm64.tar.gz"
+      sha256 "06777f0137aeeb144d6b02bbb88959673b0333c3f4f1dbe156868dd05b1721ce"
     else
-      url "https://github.com/amaljithkuttamath/crux/releases/download/v0.2.0/crux-linux-amd64.tar.gz"
-      sha256 "ad4e04c32982518ed3d952578b7dc2bacd277355c1c6a5a911f3b4efcaeac42f"
+      url "https://github.com/amaljithkuttamath/crux/releases/download/v0.5.0/crux-linux-amd64.tar.gz"
+      sha256 "1a28e751c419c85431664dd226e3479013892c1e25158c79194037d6cce78b5e"
     end
   end
 
   def install
     bin.install "crux"
+
+    if OS.mac? && File.directory?("CruxBar.app")
+      prefix.install "CruxBar.app"
+    end
+  end
+
+  def caveats
+    if OS.mac?
+      <<~EOS
+        CruxBar (menu bar monitor) has been installed to:
+          #{prefix}/CruxBar.app
+
+        To launch:
+          open #{prefix}/CruxBar.app
+
+        To start at login:
+          Add CruxBar to System Settings > General > Login Items
+      EOS
+    end
   end
 
   test do
