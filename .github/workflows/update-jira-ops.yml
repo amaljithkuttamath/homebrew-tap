@@ -78,6 +78,12 @@ jobs:
           for checksum in dist/*.sha256; do
             (cd dist && sha256sum --check "$(basename "$checksum")")
           done
+          for archive in dist/*.tar.gz; do
+            gh attestation verify "$archive" \
+              --repo amaljithkuttamath/jira-ops \
+              --signer-workflow amaljithkuttamath/jira-ops/.github/workflows/release.yml \
+              --source-ref "refs/tags/$tag"
+          done
 
       - name: Render and test formula
         shell: bash
@@ -126,6 +132,7 @@ jobs:
           git commit -m "chore: update jira-ops to $version"
           git push origin "$branch"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Open update pull request
         if: steps.change.outputs.changed == 'true'
@@ -156,6 +163,7 @@ jobs:
         shell: bash
         env:
           branch: ${{ steps.branch.outputs.branch }}
+          head_sha: ${{ steps.branch.outputs.head_sha }}
           pr_number: ${{ steps.pull_request.outputs.number }}
         run: |
           set -euo pipefail
@@ -166,8 +174,8 @@ jobs:
               --branch "$branch" \
               --event workflow_dispatch \
               --limit 1 \
-              --json databaseId \
-              --jq '.[0].databaseId // empty')
+              --json databaseId,headSha \
+              --jq ".[] | select(.headSha == \"$head_sha\") | .databaseId")
             [[ -n "$run_id" ]] && break
             sleep 3
           done
@@ -176,4 +184,4 @@ jobs:
             exit 1
           }
           gh run watch "$run_id" --exit-status
-          gh pr merge "$pr_number" --squash --delete-branch
+          gh pr merge "$pr_number" --squash --delete-branch --match-head-commit "$head_sha"

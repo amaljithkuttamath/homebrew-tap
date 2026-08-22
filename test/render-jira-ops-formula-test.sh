@@ -198,6 +198,9 @@ for expected in \
   'actions: write' \
   'gh release download "$tag"' \
   'sha256sum --check' \
+  'gh attestation verify "$archive"' \
+  '--signer-workflow amaljithkuttamath/jira-ops/.github/workflows/release.yml' \
+  '--source-ref "refs/tags/$tag"' \
   'script/render-jira-ops-formula "$version" dist Formula/jira-ops.rb' \
   'gh pr list --state open' \
   'chore: update jira-ops to $version' \
@@ -206,7 +209,9 @@ for expected in \
   'gh pr create' \
   'gh workflow run ci.yml --ref "$branch"' \
   'gh run watch "$run_id" --exit-status' \
-  'gh pr merge "$pr_number" --squash --delete-branch'
+  'head_sha: ${{ steps.branch.outputs.head_sha }}' \
+  '--json databaseId,headSha' \
+  'gh pr merge "$pr_number" --squash --delete-branch --match-head-commit "$head_sha"'
 do
   assert_updater_contains "$expected"
 done
