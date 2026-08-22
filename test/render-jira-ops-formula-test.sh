@@ -47,7 +47,6 @@ assert_contains() {
 }
 
 assert_contains 'class JiraOps < Formula'
-assert_contains 'version "0.2.0-beta.2"'
 assert_contains 'license any_of: ["MIT", "Apache-2.0"]'
 assert_contains 'jira-ops-v0.2.0-beta.2-aarch64-apple-darwin.tar.gz'
 assert_contains 'sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'

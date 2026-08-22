@@ -45,7 +45,6 @@ cat > "$temporary" <<FORMULA
 class JiraOps < Formula
   desc "Predictable, agent-friendly CLI for Jira Cloud"
   homepage "https://github.com/amaljithkuttamath/jira-ops"
-  version "$version"
   license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do

@@ -1,7 +1,6 @@
 class JiraOps < Formula
   desc "Predictable, agent-friendly CLI for Jira Cloud"
   homepage "https://github.com/amaljithkuttamath/jira-ops"
-  version "0.2.0-beta.2"
   license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
