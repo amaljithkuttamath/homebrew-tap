@@ -92,11 +92,22 @@ jobs:
       - name: Detect update
         id: change
         shell: bash
+        env:
+          version: ${{ steps.release.outputs.version }}
         run: |
+          set -euo pipefail
           if git diff --quiet -- Formula/jira-ops.rb; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
           else
-            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            existing_pr=$(gh pr list --state open \
+              --json title \
+              --jq ".[] | select(.title == \"chore: update jira-ops to $version\") | .title")
+            if [[ -n "$existing_pr" ]]; then
+              echo "an update pull request is already open for jira-ops $version"
+              echo 'changed=false' >> "$GITHUB_OUTPUT"
+            else
+              echo 'changed=true' >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Push verified update

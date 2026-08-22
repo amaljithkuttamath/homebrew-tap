@@ -156,7 +156,7 @@ assert_workflow_contains() {
 for expected in \
   'pull_request:' \
   'workflow_dispatch:' \
-  'macos-14' \
+  'macos-15' \
   'ubuntu-24.04' \
   'bash test/render-jira-ops-formula-test.sh' \
   'ruby -c Formula/jira-ops.rb' \
@@ -199,6 +199,8 @@ for expected in \
   'gh release download "$tag"' \
   'sha256sum --check' \
   'script/render-jira-ops-formula "$version" dist Formula/jira-ops.rb' \
+  'gh pr list --state open' \
+  'chore: update jira-ops to $version' \
   'branch="automation/jira-ops-$safe_version-$GITHUB_RUN_ID"' \
   'gh pr create' \
   'gh workflow run ci.yml --ref "$branch"' \
