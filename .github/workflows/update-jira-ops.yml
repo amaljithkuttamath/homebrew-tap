@@ -99,15 +99,14 @@ jobs:
           if git diff --quiet -- Formula/jira-ops.rb; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
           else
-            existing_pr=$(gh pr list --state open \
-              --json title \
-              --jq ".[] | select(.title == \"chore: update jira-ops to $version\") | .title")
-            if [[ -n "$existing_pr" ]]; then
-              echo "an update pull request is already open for jira-ops $version"
-              echo 'changed=false' >> "$GITHUB_OUTPUT"
-            else
-              echo 'changed=true' >> "$GITHUB_OUTPUT"
+            existing_pr_number=$(gh pr list --state open \
+              --json headRefName,isCrossRepository,number,title \
+              --jq "[.[] | select(.isCrossRepository == false and (.headRefName | startswith(\"automation/jira-ops-\")) and .title == \"chore: update jira-ops to $version\")][0].number // empty")
+            if [[ -n "$existing_pr_number" ]]; then
+              echo "replacing stale jira-ops $version automation pull request"
+              gh pr close "$existing_pr_number" --delete-branch
             fi
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Push verified update

@@ -201,6 +201,7 @@ for expected in \
   'script/render-jira-ops-formula "$version" dist Formula/jira-ops.rb' \
   'gh pr list --state open' \
   'chore: update jira-ops to $version' \
+  'gh pr close "$existing_pr_number" --delete-branch' \
   'branch="automation/jira-ops-$safe_version-$GITHUB_RUN_ID"' \
   'gh pr create' \
   'gh workflow run ci.yml --ref "$branch"' \
