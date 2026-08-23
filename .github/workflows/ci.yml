@@ -1,0 +1,51 @@
+name: Tap CI
+
+"on":
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    name: Formula checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-15
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Set up Homebrew and tap
+        uses: Homebrew/actions/setup-homebrew@1f8e202ffddf94def7f42f6fa3a482e821489f9c # 2026.07.10.1
+
+      - name: Test deterministic formula rendering
+        run: bash test/render-jira-ops-formula-test.sh
+
+      - name: Check formula syntax
+        run: ruby -c Formula/jira-ops.rb
+
+      - name: Check formula style
+        run: brew style Formula/jira-ops.rb
+
+      - name: Audit formula
+        run: brew audit --strict --online amaljithkuttamath/tap/jira-ops
+
+      - name: Install formula
+        run: brew install amaljithkuttamath/tap/jira-ops
+
+      - name: Run formula test
+        run: brew test amaljithkuttamath/tap/jira-ops
+
+      - name: Verify installed version
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=$(brew info --json=v2 amaljithkuttamath/tap/jira-ops | jq -r '.formulae[0].versions.stable')
+          jira-ops version | grep -Fq "$expected"

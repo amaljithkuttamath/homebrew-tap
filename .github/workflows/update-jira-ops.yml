@@ -1,0 +1,187 @@
+name: Update jira-ops formula
+
+"on":
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact jira-ops release tag; newest published release when empty
+        required: false
+        type: string
+
+concurrency:
+  group: update-jira-ops-formula
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Verify and update formula
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out tap
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release
+        id: release
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag=$REQUESTED_TAG
+          if [[ -z "$tag" ]]; then
+            tag=$(gh release list \
+              --repo amaljithkuttamath/jira-ops \
+              --limit 1 \
+              --json tagName \
+              --jq '.[0].tagName')
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "invalid jira-ops release tag: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify release archives
+        shell: bash
+        env:
+          tag: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir dist
+          for target in \
+            aarch64-apple-darwin \
+            x86_64-apple-darwin \
+            aarch64-unknown-linux-gnu \
+            x86_64-unknown-linux-gnu
+          do
+            gh release download "$tag" \
+              --repo amaljithkuttamath/jira-ops \
+              --dir dist \
+              --pattern "jira-ops-$tag-$target.tar.gz" \
+              --pattern "jira-ops-$tag-$target.tar.gz.sha256"
+          done
+          [[ $(find dist -maxdepth 1 -name '*.tar.gz' -type f | wc -l) -eq 4 ]]
+          [[ $(find dist -maxdepth 1 -name '*.sha256' -type f | wc -l) -eq 4 ]]
+          for checksum in dist/*.sha256; do
+            (cd dist && sha256sum --check "$(basename "$checksum")")
+          done
+          for archive in dist/*.tar.gz; do
+            gh attestation verify "$archive" \
+              --repo amaljithkuttamath/jira-ops \
+              --signer-workflow amaljithkuttamath/jira-ops/.github/workflows/release.yml \
+              --source-ref "refs/tags/$tag"
+          done
+
+      - name: Render and test formula
+        shell: bash
+        env:
+          version: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          script/render-jira-ops-formula "$version" dist Formula/jira-ops.rb
+          bash test/render-jira-ops-formula-test.sh
+          ruby -c Formula/jira-ops.rb
+
+      - name: Detect update
+        id: change
+        shell: bash
+        env:
+          version: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- Formula/jira-ops.rb; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            existing_pr_number=$(gh pr list --state open \
+              --json headRefName,isCrossRepository,number,title \
+              --jq "[.[] | select(.isCrossRepository == false and (.headRefName | startswith(\"automation/jira-ops-\")) and .title == \"chore: update jira-ops to $version\")][0].number // empty")
+            if [[ -n "$existing_pr_number" ]]; then
+              echo "replacing stale jira-ops $version automation pull request"
+              gh pr close "$existing_pr_number" --delete-branch
+            fi
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push verified update
+        if: steps.change.outputs.changed == 'true'
+        id: branch
+        shell: bash
+        env:
+          version: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          safe_version=${version//[^0-9A-Za-z.-]/-}
+          branch="automation/jira-ops-$safe_version-$GITHUB_RUN_ID"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git add Formula/jira-ops.rb
+          git commit -m "chore: update jira-ops to $version"
+          git push origin "$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Open update pull request
+        if: steps.change.outputs.changed == 'true'
+        id: pull_request
+        shell: bash
+        env:
+          branch: ${{ steps.branch.outputs.branch }}
+          version: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "chore: update jira-ops to $version" \
+            --body "Update the jira-ops Homebrew formula to the verified $version release assets."
+          pr_number=$(gh pr view "$branch" --json number --jq '.number')
+          echo "number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch validation for exact update branch
+        if: steps.change.outputs.changed == 'true'
+        shell: bash
+        env:
+          branch: ${{ steps.branch.outputs.branch }}
+        run: gh workflow run ci.yml --ref "$branch"
+
+      - name: Wait for validation and merge
+        if: steps.change.outputs.changed == 'true'
+        shell: bash
+        env:
+          branch: ${{ steps.branch.outputs.branch }}
+          head_sha: ${{ steps.branch.outputs.head_sha }}
+          pr_number: ${{ steps.pull_request.outputs.number }}
+        run: |
+          set -euo pipefail
+          run_id=
+          for _ in $(seq 1 20); do
+            run_id=$(gh run list \
+              --workflow ci.yml \
+              --branch "$branch" \
+              --event workflow_dispatch \
+              --limit 1 \
+              --json databaseId,headSha \
+              --jq ".[] | select(.headSha == \"$head_sha\") | .databaseId")
+            [[ -n "$run_id" ]] && break
+            sleep 3
+          done
+          [[ -n "$run_id" ]] || {
+            echo "validation workflow was not created for $branch" >&2
+            exit 1
+          }
+          gh run watch "$run_id" --exit-status
+          gh pr merge "$pr_number" --squash --delete-branch --match-head-commit "$head_sha"
