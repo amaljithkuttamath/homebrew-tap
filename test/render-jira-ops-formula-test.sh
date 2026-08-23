@@ -32,7 +32,11 @@ done
 
 "$renderer" "$version" "$dist" "$output"
 
-formula_mode=$(stat -f '%Lp' "$output" 2>/dev/null || stat -c '%a' "$output")
+if [[ $(uname -s) == Darwin ]]; then
+  formula_mode=$(stat -f '%Lp' "$output")
+else
+  formula_mode=$(stat -c '%a' "$output")
+fi
 [[ "$formula_mode" == 644 ]] || {
   printf 'generated formula mode is %s, expected 644\n' "$formula_mode" >&2
   exit 1
